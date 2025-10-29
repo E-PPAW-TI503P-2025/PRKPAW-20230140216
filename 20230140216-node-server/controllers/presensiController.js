@@ -3,6 +3,12 @@ const { Op } = Sequelize;
 const { format } = require("date-fns-tz");
 const timeZone = "Asia/Jakarta";
 
+const isValidDate = (dateString) => {
+    if (!dateString) return true; 
+    const date = new Date(dateString);
+    return date instanceof Date && !isNaN(date); 
+};
+
 exports.CheckIn = async (req, res) => {
   // 2. Gunakan try...catch untuk error handling
   try {
@@ -51,6 +57,18 @@ exports.updatePresensi = async (req, res) => {
   try {
     const presensiId = req.params.id;
     const { checkIn, checkOut, nama } = req.body;
+    if (checkIn && !isValidDate(checkIn)) {
+        return res.status(400).json({
+            success: false,
+            message: "Format tanggal CheckIn tidak valid. Gunakan format yang benar."
+        });
+    }
+    if (checkOut && !isValidDate(checkOut)) {
+        return res.status(400).json({
+            success: false,
+            message: "Format tanggal CheckOut tidak valid. Gunakan format yang benar."
+        });
+    }
     if (checkIn === undefined && checkOut === undefined && nama === undefined) {
       return res.status(400).json({
         message:
@@ -148,7 +166,6 @@ exports.CheckOut = async (req, res) => {
   }
 };
 
-// --- FUNGSI BARU: PENCARIAN BERDASARKAN TANGGAL ---
 exports.searchByDate = async (req, res) => {
     // 1. Ambil query parameter 'date' (diharapkan format YYYY-MM-DD)
     const { date } = req.query; 
