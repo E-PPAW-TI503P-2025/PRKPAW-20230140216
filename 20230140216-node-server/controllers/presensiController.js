@@ -66,7 +66,7 @@ exports.updatePresensi = async (req, res) => {
     if (checkOut && !isValidDate(checkOut)) {
         return res.status(400).json({
             success: false,
-            message: "Format tanggal CheckOut tidak valid. Gunakan format yang benar."
+            message: "Format tanggal CheckOut tidak valid. Gunakan format yang benar (yyyy-mm-dd)."
         });
     }
     if (checkIn === undefined && checkOut === undefined && nama === undefined) {
