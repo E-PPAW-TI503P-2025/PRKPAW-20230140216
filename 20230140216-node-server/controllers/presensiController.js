@@ -1,4 +1,5 @@
-const { Presensi } = require("../models");
+const { Presensi,Sequelize } = require("../models");
+const { Op } = Sequelize;
 const { format } = require("date-fns-tz");
 const timeZone = "Asia/Jakarta";
 
@@ -145,4 +146,67 @@ exports.CheckOut = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
   }
+};
+
+// --- FUNGSI BARU: PENCARIAN BERDASARKAN TANGGAL ---
+exports.searchByDate = async (req, res) => {
+    // 1. Ambil query parameter 'date' (diharapkan format YYYY-MM-DD)
+    const { date } = req.query; 
+
+    // Cek apakah parameter 'date' ada
+    if (!date) {
+        return res.status(400).json({
+            success: false,
+            message: "Parameter 'date' diperlukan untuk pencarian (format: YYYY-MM-DD)."
+        });
+    }
+    
+    try {
+        // 2. Tentukan batas waktu untuk pencarian di kolom DATETIME
+        // Start of the day (00:00:00)
+        // Gunakan 'T00:00:00.000Z' untuk memastikan interpretasi UTC yang konsisten
+        const startDate = new Date(`${date}T00:00:00.000Z`); 
+        // End of the day (23:59:59.999)
+        const endDate = new Date(`${date}T23:59:59.999Z`); 
+
+        // Cek validitas tanggal
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: "Format tanggal tidak valid. Gunakan YYYY-MM-DD."
+            });
+        }
+
+        // 3. Lakukan pencarian di database menggunakan Op.between pada kolom checkIn
+        const results = await Presensi.findAll({
+            where: {
+                checkIn: {
+                    [Op.between]: [startDate, endDate]
+                }
+            }
+        });
+
+        // 4. Beri respons dengan hasil pencarian
+        if (results.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `Tidak ditemukan data presensi pada tanggal ${date}.`
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            count: results.length,
+            data: results
+        });
+
+    } catch (error) {
+        // 5. Penanganan error server
+        console.error("Error saat mencari presensi berdasarkan tanggal:", error);
+        res.status(500).json({
+            success: false,
+            message: "Terjadi kesalahan server saat melakukan pencarian berdasarkan tanggal.",
+            error: error.message
+        });
+    }
 };
