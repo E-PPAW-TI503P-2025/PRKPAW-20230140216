@@ -10,11 +10,35 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      // Definisikan relasi di sini jika ada
+      // Contoh: User.hasMany(models.Presensi, { foreignKey: 'userId' });
     }
   }
   User.init({
-    nama: DataTypes.STRING
+    nama: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: {
+        isEmail: true 
+      }
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    role: {
+      type: DataTypes.ENUM('mahasiswa', 'admin'), 
+      allowNull: false,
+      defaultValue: 'mahasiswa',
+      validate: {
+        isIn: [['mahasiswa', 'admin']] 
+      }
+    }
   }, {
     sequelize,
     modelName: 'User',
