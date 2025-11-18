@@ -40,11 +40,13 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('Login attempt for email:', email);
 
     const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(404).json({ message: "Email tidak ditemukan." });
     }
+    console.log('Stored password hash startsWith:', user.password ? user.password.slice(0, 20) + '...' : 'no-password');
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
