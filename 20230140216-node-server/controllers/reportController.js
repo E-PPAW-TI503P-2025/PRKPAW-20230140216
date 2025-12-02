@@ -1,27 +1,28 @@
-const presensiRecords = require("../data/presensiData");
-const { Presensi } = require("../models");
-const { Op } = require("sequelize");
+const { Presensi, User } = require('../models');
 
 exports.getDailyReport = async (req, res) => {
   try {
-    const { nama } = req.query;
-    let options = { where: {} };
+    const reports = await Presensi.findAll({
+      include: [
+        {
+          model: User,
+          as: 'user', 
+          attributes: ['nama', 'email', 'role'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']] 
+    });
 
-    if (nama) {
-      options.where.nama = {
-        [Op.like]: `%${nama}%`,
-      };
+    if (reports.length > 0) {
+        console.log("Data pertama ditemukan:", JSON.stringify(reports[0], null, 2));
+    } else {
+        console.log("Tabel Presensi KOSONG.");
     }
 
-    const records = await Presensi.findAll(options);
+    res.status(200).json(reports);
 
-    res.json({
-      reportDate: new Date().toLocaleDateString(),
-      data: records,
-    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Gagal mengambil laporan", error: error.message });
+    console.error("Error fetching report:", error);
+    res.status(500).json({ message: "Gagal mengambil data laporan.", error: error.message });
   }
 };
