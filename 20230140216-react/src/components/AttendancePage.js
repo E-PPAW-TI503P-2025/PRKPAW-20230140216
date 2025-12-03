@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import Webcam from 'react-webcam';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -14,66 +15,114 @@ L.Marker.prototype.options.icon = DefaultIcon;
 function AttendancePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [coords, setCoords] = useState(null);
+  const [image, setImage] = useState(null);
+  
+  const webcamRef = useRef(null);
   const navigate = useNavigate();
 
-  // KOORDINAT DEFAULT: YOGYAKARTA (Tugu/Malioboro area)
-  // Tidak menggunakan GPS Browser agar lebih mudah testing
-  const [coords] = useState({ lat: -7.7956, lng: 110.3695 });
+  // 1. Ambil Lokasi (Geolocation API)
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (err) => setError("Gagal ambil lokasi: " + err.message)
+      );
+    }
+  }, []);
 
-  const handleAction = async (type) => {
-    setMessage(""); setError("");
+  // 2. Ambil Foto (Capture)
+  const capture = useCallback(() => {
+    if (webcamRef.current) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      setImage(imageSrc);
+    }
+  }, [webcamRef]);
+
+  // 3. Kirim Data (Check-In)
+  const handleCheckIn = async () => {
+    if (!coords || !image) return setError("Wajib ambil foto selfie dulu!");
+    
     const token = localStorage.getItem("token");
     if (!token) { navigate("/login"); return; }
 
-    const endpoint = type === 'in' ? '/check-in' : '/check-out';
-
     try {
-      const res = await axios.post(`http://localhost:3001/api/presensi${endpoint}`, 
-        { latitude: coords.lat, longitude: coords.lng },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage(res.data.message);
+        const blob = await (await fetch(image)).blob();
+        const formData = new FormData();
+        formData.append('latitude', coords.lat);
+        formData.append('longitude', coords.lng);
+        formData.append('image', blob, 'selfie.jpg');
+
+        await axios.post("http://localhost:3001/api/presensi/check-in", formData, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        setMessage("Check-in berhasil!");
     } catch (err) {
-      const msg = err.response?.data?.message || "Gagal memproses data.";
-      setError(msg);
-      
-      // Auto Logout jika token expired/rusak
-      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-         setTimeout(() => { localStorage.removeItem('token'); navigate('/login'); }, 1500);
-      }
+        setError("Gagal Check-In: " + (err.response?.data?.message || err.message));
     }
   };
 
+  // 4. Check-Out
+  const handleCheckOut = async () => {
+      if (!coords) return setError("Tunggu lokasi...");
+      const token = localStorage.getItem("token");
+      try {
+          await axios.post("http://localhost:3001/api/presensi/check-out", 
+            { latitude: coords.lat, longitude: coords.lng }, 
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setMessage("Check-out berhasil!");
+      } catch(err) { setError("Gagal Checkout"); }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-lg border border-gray-200 mt-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-2 text-center">📍 Presensi Mahasiswa</h2>
-      <p className="text-center text-gray-400 text-sm mb-4">Lokasi diset otomatis: Yogyakarta</p>
+    <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg border border-gray-200 mt-6">
+      <h2 className="text-2xl font-bold mb-4 text-center text-gray-800">Selfie Presensi</h2>
 
-      {message && <div className="bg-green-100 text-green-700 p-3 rounded mb-4 text-center font-bold">{message}</div>}
-      {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-center">{error}</div>}
+      {message && <div className="bg-green-100 text-green-800 p-3 mb-3 text-center font-bold">{message}</div>}
+      {error && <div className="bg-red-100 text-red-800 p-3 mb-3 text-center rounded font-bold border border-red-200">{error}</div>}
 
-      <div className="rounded-lg overflow-hidden border border-gray-300 mb-6 relative z-0" style={{ height: '350px' }}>
-        <MapContainer center={[coords.lat, coords.lng]} zoom={15} style={{ height: '100%', width: '100%' }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
-          <Marker position={[coords.lat, coords.lng]}>
-            <Popup>Lokasi Presensi Anda</Popup>
-          </Marker>
-        </MapContainer>
+      {/* AREA KAMERA */}
+      <div className="mb-4 bg-black h-64 rounded-lg overflow-hidden flex justify-center items-center relative border-2 border-gray-300">
+          {image ? (
+              <img src={image} alt="Selfie" className="h-full w-full object-cover" />
+          ) : (
+              <Webcam
+                  audio={false} ref={webcamRef} screenshotFormat="image/jpeg"
+                  className="h-full w-full object-cover" videoConstraints={{ facingMode: "user" }}
+              />
+          )}
       </div>
 
-      <div className="flex gap-4">
-        <button 
-          onClick={() => handleAction('in')} 
-          className="flex-1 py-3 px-4 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition transform active:scale-95"
-        >
-          MASUK (Check-In)
-        </button>
-        <button 
-          onClick={() => handleAction('out')} 
-          className="flex-1 py-3 px-4 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition transform active:scale-95"
-        >
-          PULANG (Check-Out)
-        </button>
+      {/* TOMBOL KAMERA */}
+      <div className="mb-6 flex gap-2">
+          {!image ? (
+              <button onClick={capture} className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition">📸 Ambil Foto</button>
+          ) : (
+              <button onClick={() => setImage(null)} className="w-full bg-gray-500 text-white py-2 rounded-lg font-semibold hover:bg-gray-600 transition">🔄 Foto Ulang</button>
+          )}
+      </div>
+
+      {/* AREA PETA */}
+      <div className="h-64 border rounded-lg mb-6 relative z-0 overflow-hidden bg-gray-100">
+          {coords ? (
+             <MapContainer center={[coords.lat, coords.lng]} zoom={16} style={{ height: '100%', width: '100%' }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+                <Marker position={[coords.lat, coords.lng]}><Popup>Posisi Anda</Popup></Marker>
+             </MapContainer>
+          ) : (
+             <div className="h-full flex flex-col items-center justify-center text-gray-500 animate-pulse">
+                 <p className="text-2xl">🌍</p>
+                 <p>Mencari Lokasi...</p>
+             </div>
+          )}
+      </div>
+
+      {/* TOMBOL AKSI */}
+      <div className="flex gap-3">
+          <button onClick={handleCheckIn} disabled={!coords || !image} className="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold disabled:bg-gray-300">MASUK (Check-In)</button>
+          <button onClick={handleCheckOut} disabled={!coords} className="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold disabled:bg-gray-300">PULANG (Check-Out)</button>
       </div>
     </div>
   );
