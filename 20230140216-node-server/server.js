@@ -11,6 +11,9 @@ const reportRoutes = require("./routes/reports");
 
 const authRoutes = require("./routes/auth");
 
+//import iot
+const iotRoutes = require("./routes/iot");
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -28,6 +31,10 @@ app.use("/api/books", ruteBuku);
 app.use("/api/presensi", presensiRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/auth", authRoutes);
+
+// Gunakan router iot
+app.use("/api/iot", iotRoutes);
+
 app.listen(PORT, () => {
   console.log(`Express server running at http://localhost:${PORT}/`);
 });
